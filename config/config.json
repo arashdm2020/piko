@@ -1,0 +1,43 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8081,
+    "readTimeout": 15000000000,
+    "writeTimeout": 15000000000,
+    "shutdownTimeout": 30000000000
+  },
+  "database": {
+    "driver": "mysql",
+    "connectionString": "root:@tcp(localhost:3306)/piko?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci",
+    "maxOpenConns": 25,
+    "maxIdleConns": 25,
+    "connMaxLifetime": 300
+  },
+  "auth": {
+    "jwtSecret": "change-me-in-production",
+    "jwtExpirationTime": 86400000000000,
+    "refreshTokenDuration": 604800000000000,
+    "argon2Time": 1,
+    "argon2Memory": 65536,
+    "argon2Threads": 4,
+    "argon2KeyLength": 32
+  },
+  "cors": {
+    "allowOrigins": "*",
+    "allowMethods": "GET,POST,PUT,DELETE,OPTIONS",
+    "allowHeaders": "Origin,Content-Type,Accept,Authorization",
+    "allowCredentials": true,
+    "maxAge": 86400
+  },
+  "crypto": {
+    "keyAlgorithm": "ed25519",
+    "addressAlgorithm": "base58",
+    "addressLength": 46
+  },
+  "blockchain": {
+    "blockTime": 10000000000,
+    "dataDir": "./data",
+    "storageType": "badger",
+    "mempoolCapacity": 10000
+  }
+} 
