@@ -7,6 +7,7 @@ Piko is a secure, scalable backend API for a decentralized encrypted messaging a
 - **End-to-End Encrypted Messaging**: Secure communication between users with Ed25519 cryptography
 - **Blockchain Integration**: Messages are stored and verified on a blockchain for immutability
 - **Channel/Group Messaging**: Support for group conversations
+- **Secret Chat**: Temporary, anonymous chat rooms that require no authentication
 - **User Authentication**: JWT-based authentication with Argon2 password hashing
 - **WebSocket Support**: Real-time communication between users
 - **RESTful API**: Well-structured API for easy integration with frontend applications
@@ -75,6 +76,14 @@ piko/
 - `GET /api/explore/:address`: Explore transactions for an address
 - `GET /api/proof/:message_id`: Get proof for a message
 - `GET /api/blockchain/stats`: Get blockchain statistics
+
+### Secret Chat (No Authentication Required)
+- `POST /api/secret-chat/create`: Create a new secret chat
+- `POST /api/secret-chat/join`: Join an existing secret chat
+- `POST /api/secret-chat/send`: Send a message in a secret chat
+- `GET /api/secret-chat/messages/:channel_id`: Get messages from a secret chat
+- `DELETE /api/secret-chat/:channel_id`: Delete a secret chat
+- `GET /ws/secret/:session_id`: WebSocket connection for real-time secret chat updates
 
 ### WebSocket
 - `GET /ws`: WebSocket connection for real-time updates
