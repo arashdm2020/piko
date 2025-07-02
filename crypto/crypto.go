@@ -107,12 +107,12 @@ func HashPassword(password string, salt []byte, time, memory uint32, threads uin
 	}
 
 	hash := argon2.IDKey([]byte(password), salt, time, memory, threads, keyLen)
-	
+
 	// Combine salt and hash
 	result := make([]byte, len(salt)+len(hash))
 	copy(result, salt)
 	copy(result[len(salt):], hash)
-	
+
 	return result, nil
 }
 
@@ -123,19 +123,19 @@ func VerifyPassword(password string, encodedHash string, time, memory uint32, th
 	if err != nil {
 		return false, err
 	}
-	
+
 	// Extract salt (first 16 bytes) and hash
 	if len(hashBytes) < 16 {
 		return false, fmt.Errorf("invalid hash format")
 	}
 	salt := hashBytes[:16]
-	
+
 	// Compute hash with the same parameters and salt
 	newHash, err := HashPassword(password, salt, time, memory, threads, keyLen)
 	if err != nil {
 		return false, err
 	}
-	
+
 	// Compare hashes
 	return hex.EncodeToString(hashBytes) == hex.EncodeToString(newHash), nil
 }
@@ -180,4 +180,4 @@ func HashSHA256(data []byte) []byte {
 func HashToHex(data []byte) string {
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
-} 
+}

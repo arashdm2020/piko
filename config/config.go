@@ -14,6 +14,7 @@ type Config struct {
 	CORS       CORSConfig       `json:"cors"`
 	Crypto     CryptoConfig     `json:"crypto"`
 	Blockchain BlockchainConfig `json:"blockchain"`
+	SMS        SMSConfig        `json:"sms"`
 }
 
 // ServerConfig represents server-specific configuration
@@ -43,6 +44,7 @@ type AuthConfig struct {
 	Argon2Memory         uint32        `json:"argon2Memory"`
 	Argon2Threads        uint8         `json:"argon2Threads"`
 	Argon2KeyLength      uint32        `json:"argon2KeyLength"`
+	OTPExpiryMinutes     int           `json:"otpExpiryMinutes"`
 }
 
 // CORSConfig represents CORS-specific configuration
@@ -67,6 +69,16 @@ type BlockchainConfig struct {
 	DataDir         string        `json:"dataDir"`
 	StorageType     string        `json:"storageType"`
 	MempoolCapacity int           `json:"mempoolCapacity"`
+}
+
+// SMSConfig represents SMS service configuration
+type SMSConfig struct {
+	Provider    string `json:"provider"`
+	APIKey      string `json:"apiKey"`
+	SenderID    string `json:"senderId"`
+	BaseURL     string `json:"baseUrl"`
+	IsEnabled   bool   `json:"isEnabled"`
+	PatternCode string `json:"patternCode"`
 }
 
 // LoadConfig loads the configuration from the specified file path
@@ -105,12 +117,13 @@ func DefaultConfig() *Config {
 		},
 		Auth: AuthConfig{
 			JWTSecret:            "change-me-in-production",
-			JWTExpirationTime:    time.Hour * 24,
+			JWTExpirationTime:    time.Hour * 24 * 30, // Extended to 30 days for persistent login
 			RefreshTokenDuration: time.Hour * 24 * 7,
 			Argon2Time:           1,
 			Argon2Memory:         64 * 1024,
 			Argon2Threads:        4,
 			Argon2KeyLength:      32,
+			OTPExpiryMinutes:     5,
 		},
 		CORS: CORSConfig{
 			AllowOrigins:     "*",
@@ -129,6 +142,14 @@ func DefaultConfig() *Config {
 			DataDir:         "./data",
 			StorageType:     "badger",
 			MempoolCapacity: 10000,
+		},
+		SMS: SMSConfig{
+			Provider:    "ippanel",
+			APIKey:      "OWVmNGI4MTctODhkMi00OWIxLWI4ZGUtMDhjZTg2NGE1MTAxMjc0ZDAwZjIyYTZkNjA2ODNiNDg1Y2QwZjhkODk4Mjk=",
+			SenderID:    "+983000505",
+			BaseURL:     "https://edge.ippanel.com/v1",
+			IsEnabled:   true,
+			PatternCode: "9muuwhyyw2s1ag5",
 		},
 	}
 }

@@ -10,13 +10,14 @@ import (
 	"github.com/piko/piko/crypto"
 	"github.com/piko/piko/middleware"
 	"github.com/piko/piko/models"
+	"github.com/piko/piko/websocket"
 )
 
 // SendMessageRequest represents a request to send a message
 type SendMessageRequest struct {
-	RecipientAddress  string  `json:"recipient_address"`
-	EncryptedContent  string  `json:"encrypted_content"`
-	TTL               *int64  `json:"ttl,omitempty"` // Time to live in seconds
+	RecipientAddress string `json:"recipient_address"`
+	EncryptedContent string `json:"encrypted_content"`
+	TTL              *int64 `json:"ttl,omitempty"` // Time to live in seconds
 }
 
 // MessageResponse represents a message response
@@ -114,9 +115,13 @@ func SendMessage() fiber.Handler {
 			})
 		}
 
-		// Return message ID
+		// Notify recipient via WebSocket if they're online
+		go websocket.NotifyNewMessage(WebSocketPool, message)
+
+		// Return message ID and status
 		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-			"id": messageID,
+			"id":     messageID,
+			"status": string(models.MessageStatusPending),
 		})
 	}
 }
@@ -140,7 +145,7 @@ func GetInbox() fiber.Handler {
 			})
 		}
 
-		// Convert messages to response format
+		// Convert messages to response format and update status
 		response := make([]MessageResponse, len(messages))
 		for i, message := range messages {
 			response[i] = MessageResponse{
@@ -159,6 +164,24 @@ func GetInbox() fiber.Handler {
 				if err := models.UpdateMessageStatus(message.ID, models.MessageStatusDelivered); err != nil {
 					// Log error but continue
 					// TODO: Add proper logging
+				} else {
+					// Notify sender that message was delivered
+					senderAddress := message.SenderAddress
+					messageID := message.ID
+
+					// Use goroutine to avoid blocking
+					go func(msgID, sender string) {
+						WebSocketPool.Broadcast <- websocket.Message{
+							Type: "status_update",
+							Payload: map[string]interface{}{
+								"message_id": msgID,
+								"status":     "delivered",
+								"recipient":  userAddress,
+								"timestamp":  time.Now().Format(time.RFC3339),
+							},
+							To: sender,
+						}
+					}(messageID, senderAddress)
 				}
 			}
 		}
@@ -249,8 +272,21 @@ func GetMessage() fiber.Handler {
 			if err := models.UpdateMessageStatus(message.ID, models.MessageStatusRead); err != nil {
 				// Log error but continue
 				// TODO: Add proper logging
+			} else {
+				// Notify sender that message was read via WebSocket
+				go func() {
+					WebSocketPool.Broadcast <- websocket.Message{
+						Type: "status_update",
+						Payload: map[string]interface{}{
+							"message_id": message.ID,
+							"status":     "read",
+							"recipient":  userAddress,
+							"timestamp":  time.Now().Format(time.RFC3339),
+						},
+						To: message.SenderAddress,
+					}
+				}()
 			}
-			message.Status = models.MessageStatusRead
 		}
 
 		// Convert message to response format
@@ -319,4 +355,4 @@ func DeleteMessage() fiber.Handler {
 			"message": "Message deleted",
 		})
 	}
-} 
+}

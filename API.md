@@ -4,45 +4,86 @@ This document provides detailed information about the Piko API endpoints with ex
 
 ## Authentication
 
-### Register a New User
+### Register a New User (Step 1: Request OTP)
 
 **Endpoint**: `POST /api/auth/register`
 
 **Request Body**:
 ```json
 {
-  "email": "user@example.com",
-  "password": "securepassword123"
+  "phone": "+1234567890"
 }
 ```
 
 **Response**:
 ```json
 {
-  "user_id": 1,
-  "address": "PikoXYZ123...",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "message": "OTP sent to your phone",
+  "expires_in": 5
 }
 ```
 
-### Login
+### Register a New User (Step 2: Verify OTP and Create User)
+
+**Endpoint**: `POST /api/auth/verify-register`
+
+**Description**: Verifies the OTP code and creates a new user account only if verification is successful. A unique blockchain address is generated for the user.
+
+**Request Body**:
+```json
+{
+  "phone": "+1234567890",
+  "code": "123456"
+}
+```
+
+**Response**:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "address": "PikoXYZ123...",
+  "private_key": "base64_encoded_private_key"
+}
+```
+
+**Note**: The private key is only returned once during registration. The client must store it securely.
+
+### Login (Step 1: Request OTP)
 
 **Endpoint**: `POST /api/auth/login`
 
 **Request Body**:
 ```json
 {
-  "email": "user@example.com",
-  "password": "securepassword123"
+  "phone": "+1234567890"
 }
 ```
 
 **Response**:
 ```json
 {
-  "user_id": 1,
-  "address": "PikoXYZ123...",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "message": "OTP sent to your phone",
+  "expires_in": 5
+}
+```
+
+### Login (Step 2: Verify OTP)
+
+**Endpoint**: `POST /api/auth/verify-login`
+
+**Request Body**:
+```json
+{
+  "phone": "+1234567890",
+  "code": "123456"
+}
+```
+
+**Response**:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "address": "PikoXYZ123..."
 }
 ```
 
@@ -61,7 +102,8 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```json
 {
   "id": 1,
-  "email": "user@example.com",
+  "phone": "+1234567890",
+  "username": "user123",
   "address": "PikoXYZ123...",
   "public_key": "base64_encoded_public_key",
   "created_at": "2023-06-15T10:30:00Z"
@@ -80,8 +122,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 **Request Body**:
 ```json
 {
-  "email": "newemail@example.com",
-  "phone": "1234567890"
+  "phone": "+1234567890"
 }
 ```
 
@@ -91,6 +132,260 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   "message": "Profile updated successfully"
 }
 ```
+
+### Set Username
+
+**Endpoint**: `PUT /api/profile/username`
+
+**Headers**:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Request Body**:
+```json
+{
+  "username": "newusername"
+}
+```
+
+**Response**:
+```json
+{
+  "message": "Username set successfully",
+  "username": "newusername"
+}
+```
+
+## User Settings
+
+### Get User Settings
+
+**Endpoint**: `GET /api/settings`
+
+**Headers**:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response**:
+```json
+{
+  "user_id": 1,
+  "nickname": "John Doe",
+  "theme": "system",
+  "notification_enabled": true,
+  "sound_enabled": true,
+  "language": "en",
+  "auto_download_media": true,
+  "privacy_last_seen": "everyone",
+  "privacy_profile_photo": "everyone",
+  "privacy_status": "everyone",
+  "created_at": "2023-06-15T10:30:00Z",
+  "updated_at": "2023-06-15T10:30:00Z"
+}
+```
+
+### Update User Settings
+
+**Endpoint**: `PUT /api/settings`
+
+**Headers**:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Request Body**:
+```json
+{
+  "nickname": "John Smith",
+  "theme": "dark",
+  "notification_enabled": false,
+  "sound_enabled": true,
+  "language": "fr",
+  "auto_download_media": false,
+  "privacy_last_seen": "contacts",
+  "privacy_profile_photo": "everyone",
+  "privacy_status": "nobody"
+}
+```
+
+**Response**:
+```json
+{
+  "user_id": 1,
+  "nickname": "John Smith",
+  "theme": "dark",
+  "notification_enabled": false,
+  "sound_enabled": true,
+  "language": "fr",
+  "auto_download_media": false,
+  "privacy_last_seen": "contacts",
+  "privacy_profile_photo": "everyone",
+  "privacy_status": "nobody",
+  "created_at": "2023-06-15T10:30:00Z",
+  "updated_at": "2023-06-15T11:45:00Z"
+}
+```
+
+### Update Nickname
+
+**Endpoint**: `PUT /api/settings/nickname`
+
+**Headers**:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Request Body**:
+```json
+{
+  "nickname": "Johnny"
+}
+```
+
+**Response**:
+```json
+{
+  "message": "Nickname updated successfully",
+  "nickname": "Johnny"
+}
+```
+
+## User Avatars
+
+### Upload Avatar
+
+**Endpoint**: `POST /api/avatars`
+
+**Headers**:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: multipart/form-data
+```
+
+**Request Body**:
+```
+avatar: [file]
+```
+
+**Response**:
+```json
+{
+  "id": 1,
+  "user_id": 1,
+  "file_path": "./uploads/avatars/1_profile.jpg",
+  "file_name": "1_profile.jpg",
+  "file_size": 102400,
+  "mime_type": "image/jpeg",
+  "width": 200,
+  "height": 200,
+  "is_active": true,
+  "created_at": "2023-06-15T10:30:00Z"
+}
+```
+
+### Get All User Avatars
+
+**Endpoint**: `GET /api/avatars`
+
+**Headers**:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response**:
+```json
+[
+  {
+    "id": 1,
+    "user_id": 1,
+    "file_path": "./uploads/avatars/1_profile.jpg",
+    "file_name": "1_profile.jpg",
+    "file_size": 102400,
+    "mime_type": "image/jpeg",
+    "width": 200,
+    "height": 200,
+    "is_active": true,
+    "created_at": "2023-06-15T10:30:00Z"
+  },
+  {
+    "id": 2,
+    "user_id": 1,
+    "file_path": "./uploads/avatars/1_avatar2.png",
+    "file_name": "1_avatar2.png",
+    "file_size": 51200,
+    "mime_type": "image/png",
+    "width": 200,
+    "height": 200,
+    "is_active": false,
+    "created_at": "2023-06-14T15:45:00Z"
+  }
+]
+```
+
+### Get Active Avatar
+
+**Endpoint**: `GET /api/avatars/active`
+
+**Headers**:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response**:
+```json
+{
+  "id": 1,
+  "user_id": 1,
+  "file_path": "./uploads/avatars/1_profile.jpg",
+  "file_name": "1_profile.jpg",
+  "file_size": 102400,
+  "mime_type": "image/jpeg",
+  "width": 200,
+  "height": 200,
+  "is_active": true,
+  "created_at": "2023-06-15T10:30:00Z"
+}
+```
+
+### Set Avatar as Active
+
+**Endpoint**: `PUT /api/avatars/:id/active`
+
+**Headers**:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response**:
+```json
+{
+  "message": "Avatar set as active"
+}
+```
+
+### Delete Avatar
+
+**Endpoint**: `DELETE /api/avatars/:id`
+
+**Headers**:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response**:
+```json
+{
+  "message": "Avatar deleted successfully"
+}
+```
+
+### Serve Avatar File
+
+**Endpoint**: `GET /api/avatars/:id/file`
+
+**Response**: The image file with appropriate Content-Type header
 
 ## Messages
 

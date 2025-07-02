@@ -3,6 +3,7 @@ package models
 import (
 	"database/sql"
 	"errors"
+	"regexp"
 	"time"
 
 	"github.com/piko/piko/database"
@@ -11,19 +12,21 @@ import (
 var (
 	// ErrUserNotFound is returned when a user is not found
 	ErrUserNotFound = errors.New("user not found")
-	// ErrEmailAlreadyExists is returned when a user with the same email already exists
-	ErrEmailAlreadyExists = errors.New("email already exists")
 	// ErrPhoneAlreadyExists is returned when a user with the same phone already exists
 	ErrPhoneAlreadyExists = errors.New("phone already exists")
 	// ErrAddressAlreadyExists is returned when a user with the same address already exists
 	ErrAddressAlreadyExists = errors.New("address already exists")
+	// ErrUsernameAlreadyExists is returned when a user with the same username already exists
+	ErrUsernameAlreadyExists = errors.New("username already exists")
+	// ErrInvalidUsername is returned when the username format is invalid
+	ErrInvalidUsername = errors.New("invalid username format")
 )
 
 // User represents a user in the system
 type User struct {
 	ID           int       `json:"id"`
-	Email        string    `json:"email,omitempty"`
-	Phone        string    `json:"phone,omitempty"`
+	Phone        string    `json:"phone"`
+	Username     string    `json:"username,omitempty"`
 	PasswordHash string    `json:"-"`
 	PublicKey    []byte    `json:"public_key"`
 	Address      string    `json:"address"`
@@ -33,18 +36,6 @@ type User struct {
 
 // CreateUser creates a new user in the database
 func CreateUser(user *User) error {
-	// Check if user with same email exists
-	if user.Email != "" {
-		var count int
-		err := database.DB.QueryRow("SELECT COUNT(*) FROM users WHERE email = ?", user.Email).Scan(&count)
-		if err != nil {
-			return err
-		}
-		if count > 0 {
-			return ErrEmailAlreadyExists
-		}
-	}
-
 	// Check if user with same phone exists
 	if user.Phone != "" {
 		var count int
@@ -67,10 +58,21 @@ func CreateUser(user *User) error {
 		return ErrAddressAlreadyExists
 	}
 
-	// Insert user into database
-	result, err := database.DB.Exec(
-		"INSERT INTO users (email, phone, password_hash, public_key, address) VALUES (?, ?, ?, ?, ?)",
-		user.Email, user.Phone, user.PasswordHash, user.PublicKey, user.Address,
+	// Start a transaction
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Insert user into database - username is not set during registration
+	result, err := tx.Exec(
+		"INSERT INTO users (phone, password_hash, public_key, address) VALUES (?, ?, ?, ?)",
+		user.Phone, user.PasswordHash, user.PublicKey, user.Address,
 	)
 	if err != nil {
 		return err
@@ -83,6 +85,23 @@ func CreateUser(user *User) error {
 	}
 	user.ID = int(id)
 
+	// Create default settings for the user
+	_, err = tx.Exec(`
+		INSERT INTO user_settings (
+			user_id, theme, notification_enabled, sound_enabled,
+			language, auto_download_media, privacy_last_seen,
+			privacy_profile_photo, privacy_status
+		) VALUES (?, 'system', TRUE, TRUE, 'en', TRUE, 'everyone', 'everyone', 'everyone')
+	`, user.ID)
+	if err != nil {
+		return err
+	}
+
+	// Commit the transaction
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -90,28 +109,10 @@ func CreateUser(user *User) error {
 func GetUserByID(id int) (*User, error) {
 	user := &User{}
 	err := database.DB.QueryRow(
-		"SELECT id, email, phone, password_hash, public_key, address, created_at, updated_at FROM users WHERE id = ?",
+		"SELECT id, phone, username, password_hash, public_key, address, created_at, updated_at FROM users WHERE id = ?",
 		id,
 	).Scan(
-		&user.ID, &user.Email, &user.Phone, &user.PasswordHash, &user.PublicKey, &user.Address, &user.CreatedAt, &user.UpdatedAt,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ErrUserNotFound
-		}
-		return nil, err
-	}
-	return user, nil
-}
-
-// GetUserByEmail retrieves a user by their email
-func GetUserByEmail(email string) (*User, error) {
-	user := &User{}
-	err := database.DB.QueryRow(
-		"SELECT id, email, phone, password_hash, public_key, address, created_at, updated_at FROM users WHERE email = ?",
-		email,
-	).Scan(
-		&user.ID, &user.Email, &user.Phone, &user.PasswordHash, &user.PublicKey, &user.Address, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Phone, &user.Username, &user.PasswordHash, &user.PublicKey, &user.Address, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -126,10 +127,10 @@ func GetUserByEmail(email string) (*User, error) {
 func GetUserByPhone(phone string) (*User, error) {
 	user := &User{}
 	err := database.DB.QueryRow(
-		"SELECT id, email, phone, password_hash, public_key, address, created_at, updated_at FROM users WHERE phone = ?",
+		"SELECT id, phone, username, password_hash, public_key, address, created_at, updated_at FROM users WHERE phone = ?",
 		phone,
 	).Scan(
-		&user.ID, &user.Email, &user.Phone, &user.PasswordHash, &user.PublicKey, &user.Address, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Phone, &user.Username, &user.PasswordHash, &user.PublicKey, &user.Address, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -144,10 +145,10 @@ func GetUserByPhone(phone string) (*User, error) {
 func GetUserByAddress(address string) (*User, error) {
 	user := &User{}
 	err := database.DB.QueryRow(
-		"SELECT id, email, phone, password_hash, public_key, address, created_at, updated_at FROM users WHERE address = ?",
+		"SELECT id, phone, username, password_hash, public_key, address, created_at, updated_at FROM users WHERE address = ?",
 		address,
 	).Scan(
-		&user.ID, &user.Email, &user.Phone, &user.PasswordHash, &user.PublicKey, &user.Address, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Phone, &user.Username, &user.PasswordHash, &user.PublicKey, &user.Address, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -158,17 +159,97 @@ func GetUserByAddress(address string) (*User, error) {
 	return user, nil
 }
 
+// GetUserByUsername retrieves a user by their username
+func GetUserByUsername(username string) (*User, error) {
+	user := &User{}
+	err := database.DB.QueryRow(
+		"SELECT id, phone, username, password_hash, public_key, address, created_at, updated_at FROM users WHERE username = ?",
+		username,
+	).Scan(
+		&user.ID, &user.Phone, &user.Username, &user.PasswordHash, &user.PublicKey, &user.Address, &user.CreatedAt, &user.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return user, nil
+}
+
+// SearchUsers searches for users by username, phone, or address
+func SearchUsers(query string) ([]*User, error) {
+	rows, err := database.DB.Query(
+		"SELECT id, phone, username, password_hash, public_key, address, created_at, updated_at FROM users WHERE username LIKE ? OR phone LIKE ? OR address LIKE ? LIMIT 20",
+		"%"+query+"%", "%"+query+"%", "%"+query+"%",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := []*User{}
+	for rows.Next() {
+		user := &User{}
+		err := rows.Scan(
+			&user.ID, &user.Phone, &user.Username, &user.PasswordHash, &user.PublicKey, &user.Address, &user.CreatedAt, &user.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 // UpdateUser updates a user's information
 func UpdateUser(user *User) error {
 	_, err := database.DB.Exec(
-		"UPDATE users SET email = ?, phone = ?, password_hash = ?, public_key = ? WHERE id = ?",
-		user.Email, user.Phone, user.PasswordHash, user.PublicKey, user.ID,
+		"UPDATE users SET phone = ?, username = ?, password_hash = ?, public_key = ? WHERE id = ?",
+		user.Phone, user.Username, user.PasswordHash, user.PublicKey, user.ID,
 	)
 	return err
 }
 
-// DeleteUser deletes a user by their ID
+// SetUsername sets or updates a user's username
+func SetUsername(userID int, username string) error {
+	// Validate username format
+	if !IsValidUsername(username) {
+		return ErrInvalidUsername
+	}
+
+	// Check if username is already taken
+	var count int
+	err := database.DB.QueryRow("SELECT COUNT(*) FROM users WHERE username = ? AND id != ?", username, userID).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return ErrUsernameAlreadyExists
+	}
+
+	// Update username
+	_, err = database.DB.Exec("UPDATE users SET username = ? WHERE id = ?", username, userID)
+	return err
+}
+
+// IsValidUsername checks if a username is valid
+func IsValidUsername(username string) bool {
+	// Username must be 3-30 characters long and contain only alphanumeric characters and underscores
+	if len(username) < 3 || len(username) > 30 {
+		return false
+	}
+
+	// Check if username contains only alphanumeric characters and underscores
+	match, _ := regexp.MatchString("^[a-zA-Z0-9_]+$", username)
+	return match
+}
+
+// DeleteUser deletes a user by ID
 func DeleteUser(id int) error {
 	_, err := database.DB.Exec("DELETE FROM users WHERE id = ?", id)
 	return err
-} 
+}

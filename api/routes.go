@@ -32,7 +32,9 @@ func RegisterRoutes(app *fiber.App) {
 
 	// Public routes
 	app.Post("/api/auth/register", handlers.Register(cfg))
+	app.Post("/api/auth/verify-register", handlers.VerifyRegister(cfg))
 	app.Post("/api/auth/login", handlers.Login(cfg))
+	app.Post("/api/auth/verify-login", handlers.VerifyLogin(cfg))
 
 	// Auth middleware for protected routes
 	authMiddleware := middleware.AuthRequired(cfg)
@@ -40,6 +42,22 @@ func RegisterRoutes(app *fiber.App) {
 	// User routes
 	app.Get("/api/profile", authMiddleware, handlers.GetProfile())
 	app.Put("/api/profile", authMiddleware, handlers.UpdateProfile())
+	app.Put("/api/profile/username", authMiddleware, handlers.SetUsername())
+	app.Get("/api/users/search", authMiddleware, handlers.SearchUsers())
+	app.Get("/api/users/:address", authMiddleware, handlers.GetUser())
+
+	// User settings routes
+	app.Get("/api/settings", authMiddleware, handlers.GetUserSettings())
+	app.Put("/api/settings", authMiddleware, handlers.UpdateUserSettings())
+	app.Put("/api/settings/nickname", authMiddleware, handlers.UpdateNickname())
+
+	// User avatar routes
+	app.Post("/api/avatars", authMiddleware, handlers.UploadAvatar())
+	app.Get("/api/avatars", authMiddleware, handlers.GetUserAvatars())
+	app.Get("/api/avatars/active", authMiddleware, handlers.GetActiveAvatar())
+	app.Put("/api/avatars/:id/active", authMiddleware, handlers.SetActiveAvatar())
+	app.Delete("/api/avatars/:id", authMiddleware, handlers.DeleteAvatar())
+	app.Get("/api/avatars/:id/file", handlers.ServeAvatar()) // Public route to serve avatar files
 
 	// Message routes
 	app.Post("/api/messages", authMiddleware, handlers.SendMessage())
@@ -81,4 +99,16 @@ func RegisterRoutes(app *fiber.App) {
 
 	// Regular WebSocket route
 	app.Get("/ws", handlers.WebSocketHandler())
+
+	// Group chat routes
+	app.Post("/api/groups", authMiddleware, handlers.CreateGroup())
+	app.Get("/api/groups", authMiddleware, handlers.GetGroups())
+	app.Get("/api/groups/:id", authMiddleware, handlers.GetGroup())
+	app.Put("/api/groups/:id", authMiddleware, handlers.UpdateGroup())
+	app.Delete("/api/groups/:id", authMiddleware, handlers.DeleteGroup())
+	app.Get("/api/groups/:id/members", authMiddleware, handlers.GetGroupMembers())
+	app.Post("/api/groups/:id/members", authMiddleware, handlers.AddGroupMember())
+	app.Delete("/api/groups/:id/members/:address", authMiddleware, handlers.RemoveGroupMember())
+	app.Post("/api/groups/:id/messages", authMiddleware, handlers.SendGroupMessage())
+	app.Get("/api/groups/:id/messages", authMiddleware, handlers.GetGroupMessages())
 }

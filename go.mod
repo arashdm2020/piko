@@ -9,6 +9,7 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.0
 	github.com/gofiber/websocket/v2 v2.2.1
 	github.com/golang-jwt/jwt/v4 v4.5.2
+	github.com/ippanel/go-rest-sdk/v2 v2.0.2
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/mr-tron/base58 v1.2.0
 	golang.org/x/crypto v0.14.0

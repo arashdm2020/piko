@@ -30,10 +30,38 @@ type Pool struct {
 
 // Message represents a WebSocket message
 type Message struct {
-	Type    string      `json:"type"`
-	Payload interface{} `json:"payload"`
-	To      string      `json:"to,omitempty"`
+	Type    string                 `json:"type"`
+	Payload map[string]interface{} `json:"payload"`
+	From    string                 `json:"from,omitempty"`
+	To      string                 `json:"to,omitempty"`
 }
+
+// MessageStatus represents the status of a message
+type MessageStatus string
+
+const (
+	// StatusSent indicates the message was sent to the server
+	StatusSent MessageStatus = "sent"
+	// StatusDelivered indicates the message was delivered to the recipient
+	StatusDelivered MessageStatus = "delivered"
+	// StatusRead indicates the message was read by the recipient
+	StatusRead MessageStatus = "read"
+)
+
+// MessageType constants
+const (
+	// MessageTypeNewMessage is sent when a new direct message is received
+	MessageTypeNewMessage = "new_message"
+
+	// MessageTypeMessageStatus is sent when a message status changes
+	MessageTypeMessageStatus = "message_status"
+
+	// MessageTypeNewChannelMessage is sent when a new channel message is received
+	MessageTypeNewChannelMessage = "new_channel_message"
+
+	// MessageTypeNewGroupMessage is sent when a new group message is received
+	MessageTypeNewGroupMessage = "new_group_message"
+)
 
 // NewPool creates a new WebSocket pool
 func NewPool() *Pool {
@@ -71,6 +99,43 @@ func (pool *Pool) Start() {
 					"message": "Welcome to Piko!",
 				},
 			})
+
+			// Mark all pending messages as delivered
+			go func() {
+				// Get all pending messages for this client
+				messages, err := models.GetMessagesByRecipient(client.Address)
+				if err != nil {
+					log.Printf("Error getting messages for %s: %v", client.Address, err)
+					return
+				}
+
+				for _, msg := range messages {
+					if msg.Status == models.MessageStatusPending {
+						// Update status to delivered
+						if err := models.UpdateMessageStatus(msg.ID, models.MessageStatusDelivered); err != nil {
+							log.Printf("Error updating message status: %v", err)
+							continue
+						}
+
+						// Notify sender about delivery
+						pool.mu.RLock()
+						senderClient, senderOnline := pool.Clients[msg.SenderAddress]
+						pool.mu.RUnlock()
+
+						if senderOnline {
+							senderClient.SendMessage(Message{
+								Type: "status_update",
+								Payload: map[string]interface{}{
+									"message_id": msg.ID,
+									"status":     "delivered",
+									"recipient":  client.Address,
+									"timestamp":  time.Now().Format(time.RFC3339),
+								},
+							})
+						}
+					}
+				}
+			}()
 
 		case client := <-pool.Unregister:
 			pool.mu.Lock()
@@ -145,12 +210,12 @@ func (client *Client) Read() {
 				// Respond with pong
 				client.SendMessage(Message{
 					Type:    "pong",
-					Payload: map[string]string{"time": time.Now().Format(time.RFC3339)},
+					Payload: map[string]interface{}{"time": time.Now().Format(time.RFC3339)},
 				})
 
 			case "typing":
 				// Handle typing indicator
-				if to, ok := message.Payload.(map[string]interface{})["to"].(string); ok {
+				if to, ok := message.Payload["to"].(string); ok {
 					// Forward typing indicator to recipient
 					client.Pool.Broadcast <- Message{
 						Type: "typing",
@@ -163,22 +228,49 @@ func (client *Client) Read() {
 
 			case "read":
 				// Handle message read status
-				if messageID, ok := message.Payload.(map[string]interface{})["message_id"].(string); ok {
+				if messageID, ok := message.Payload["message_id"].(string); ok {
 					// Update message status in database
 					if err := models.UpdateMessageStatus(messageID, models.MessageStatusRead); err != nil {
 						log.Printf("Error updating message status: %v", err)
 					} else {
 						// Get message to find sender
-						message, err := models.GetMessageByID(messageID)
+						msg, err := models.GetMessageByID(messageID)
 						if err == nil {
 							// Notify sender that message was read
 							client.Pool.Broadcast <- Message{
-								Type: "read_receipt",
+								Type: "status_update",
 								Payload: map[string]interface{}{
 									"message_id": messageID,
-									"reader":     client.Address,
+									"status":     "read",
+									"recipient":  client.Address,
+									"timestamp":  time.Now().Format(time.RFC3339),
 								},
-								To: message.SenderAddress,
+								To: msg.SenderAddress,
+							}
+						}
+					}
+				}
+
+			case "received":
+				// Handle message received status (client acknowledges receipt)
+				if messageID, ok := message.Payload["message_id"].(string); ok {
+					// Update message status in database
+					if err := models.UpdateMessageStatus(messageID, models.MessageStatusDelivered); err != nil {
+						log.Printf("Error updating message status: %v", err)
+					} else {
+						// Get message to find sender
+						msg, err := models.GetMessageByID(messageID)
+						if err == nil {
+							// Notify sender that message was delivered
+							client.Pool.Broadcast <- Message{
+								Type: "status_update",
+								Payload: map[string]interface{}{
+									"message_id": messageID,
+									"status":     "delivered",
+									"recipient":  client.Address,
+									"timestamp":  time.Now().Format(time.RFC3339),
+								},
+								To: msg.SenderAddress,
 							}
 						}
 					}
@@ -198,6 +290,7 @@ func NotifyNewMessage(pool *Pool, message *models.Message) {
 	pool.mu.RLock()
 	client, ok := pool.Clients[message.RecipientAddress]
 	pool.mu.RUnlock()
+
 	if ok {
 		// Send notification to recipient
 		client.SendMessage(Message{
@@ -207,6 +300,31 @@ func NotifyNewMessage(pool *Pool, message *models.Message) {
 				"sender_address": message.SenderAddress,
 			},
 		})
+
+		// Update message status to delivered
+		if err := models.UpdateMessageStatus(message.ID, models.MessageStatusDelivered); err != nil {
+			log.Printf("Error updating message status: %v", err)
+		} else {
+			// Notify sender about delivery
+			pool.mu.RLock()
+			senderClient, senderOnline := pool.Clients[message.SenderAddress]
+			pool.mu.RUnlock()
+
+			if senderOnline {
+				senderClient.SendMessage(Message{
+					Type: "status_update",
+					Payload: map[string]interface{}{
+						"message_id": message.ID,
+						"status":     "delivered",
+						"recipient":  message.RecipientAddress,
+						"timestamp":  time.Now().Format(time.RFC3339),
+					},
+				})
+			}
+		}
+	} else {
+		// Recipient is offline, message stays in pending state
+		log.Printf("Recipient %s is offline, message %s is pending", message.RecipientAddress, message.ID)
 	}
 }
 
@@ -251,4 +369,12 @@ func GetOnlineUsers(pool *Pool) []string {
 		users = append(users, address)
 	}
 	return users
+}
+
+// IsUserOnline checks if a user is online
+func IsUserOnline(pool *Pool, address string) bool {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+	_, ok := pool.Clients[address]
+	return ok
 }

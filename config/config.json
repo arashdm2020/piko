@@ -1,7 +1,7 @@
 {
   "server": {
     "host": "0.0.0.0",
-    "port": 8081,
+    "port": 8082,
     "readTimeout": 15000000000,
     "writeTimeout": 15000000000,
     "shutdownTimeout": 30000000000
@@ -15,12 +15,13 @@
   },
   "auth": {
     "jwtSecret": "change-me-in-production",
-    "jwtExpirationTime": 86400000000000,
+    "jwtExpirationTime": 2592000000000000,
     "refreshTokenDuration": 604800000000000,
     "argon2Time": 1,
     "argon2Memory": 65536,
     "argon2Threads": 4,
-    "argon2KeyLength": 32
+    "argon2KeyLength": 32,
+    "otpExpiryMinutes": 5
   },
   "cors": {
     "allowOrigins": "*",
@@ -39,5 +40,13 @@
     "dataDir": "./data",
     "storageType": "badger",
     "mempoolCapacity": 10000
+  },
+  "sms": {
+    "provider": "ippanel",
+    "apiKey": "OWVmNGI4MTctODhkMi00OWIxLWI4ZGUtMDhjZTg2NGE1MTAxMjc0ZDAwZjIyYTZkNjA2ODNiNDg1Y2QwZjhkODk4Mjk=",
+    "senderId": "+983000505",
+    "baseUrl": "https://edge.ippanel.com/v1",
+    "isEnabled": true,
+    "patternCode": "9muuwhyyw2s1ag5"
   }
 } 
